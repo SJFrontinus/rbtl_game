@@ -1,6 +1,6 @@
 # RBTL Game - Implementation Plan
 
-**Date:** 2026-02-02
+**Date:** 2026-02-03
 **Source:** Discussion based on `rbtl_patterns.pdf` (Richard F. Meier, OD FCOVD & Janice Rossall, 2021)
 
 ---
@@ -11,7 +11,26 @@ Replace the existing 5-target game with two new eye movement training modes base
 - **Mode A (Blank Middle)**: 10 rows × 2 columns, targets on far left and right
 - **Mode B (Full Grid)**: 10×10 character grid with 20 underlined targets
 
-Both modes share: blue dots on all targets from start, user clears dots by tapping in sequence, tap feedback (hit → dot disappears, miss → red circle), forward-only progression.
+Both modes share:
+- **Translucent blue "balloon"** overlay on each target (letter visible through it)
+- User "pops" balloons by tapping in sequence
+- **Hit**: Balloon pops with a **pop sound**
+- **Miss**: Balloon turns **translucent red**, metronome continues (no pop)
+- Forward-only progression
+
+---
+
+## Implementation Status
+
+| Component | Status |
+|-----------|--------|
+| GameSettings (enums, BPM 50-150) | DONE |
+| Target model (state, character) | DONE |
+| MetronomeService (pop sound) | DONE |
+| Setup screen | DONE |
+| GameEngine (Mode A + B) | DONE |
+| GameView (balloons, countdown) | DONE |
+| Build successful | YES |
 
 ---
 
@@ -20,13 +39,13 @@ Both modes share: blue dots on all targets from start, user clears dots by tappi
 | Aspect | Decision |
 |--------|----------|
 | Original mode | **Remove** - replaced by Mode A and Mode B |
-| Visibility | All targets visible with blue dots from start |
-| Active indicator | **None** - user clears dots in sequence naturally |
+| Target marker | **Translucent blue balloon** overlay (letter visible through it) |
+| Active indicator | **None** - user pops balloons in sequence naturally |
 | Timing | One metronome beat per tap (20 beats per exercise) |
 | Progression | Left → Right → Next Row (top to bottom) |
-| Hit feedback | Blue dot disappears |
-| Miss feedback | Red circle appears (no retry allowed) |
-| Dot size | User-configurable via **slider** |
+| Hit feedback | Balloon pops (disappears) + **pop sound** |
+| Miss feedback | Balloon turns **translucent red** + metronome tick (no pop sound) |
+| Balloon size | User-configurable via **slider** (40-120pt) |
 | BPM range | **50-150 BPM** in increments of 10 (dropdown) |
 | Pattern generation | Random with new seed each app launch |
 | Restart behavior | **Return to setup screen** - user can pick all parameters fresh |
@@ -41,10 +60,10 @@ User makes three choices before starting:
 2. **Game mode**: Mode A (Blank Middle) or Mode B (Full Grid)
 3. **Metronome speed**: Dropdown with 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150 BPM
 
-Plus: Dot size setting (slider)
+Plus: Balloon size setting (slider)
 
 ### 2. Press Start → Countdown
-- Pattern appears on screen with all blue dots visible
+- Pattern appears on screen with all blue balloons visible
 - Countdown overlays on pattern: **5, 4, 3, 2, 1, Go**
 - Each number displays for one metronome beat interval (shows the tempo)
 - Gives user time to prepare and understand the rhythm
@@ -52,57 +71,56 @@ Plus: Dot size setting (slider)
 ### 3. Game Play
 - User taps targets in sequence (left-right, top-bottom)
 - Metronome beats guide the pace
-- Blue dots disappear on correct taps
-- Red circles appear on misses
+- **Hit**: Balloon pops (disappears) with pop sound
+- **Miss**: Balloon turns red, metronome continues
 - No going back - forward only
 
 ### 4. Restart Button
-- Always visible during gameplay
+- Always visible during gameplay (except during countdown)
 - Returns to setup screen so user can adjust any settings
 - New random pattern generated on next start
 
 ### 5. Completion
 - All 20 targets attempted
-- Show results (hits/misses) - *details TBD*
+- Game ends (stats display deferred for now)
 
 ---
 
-## Pattern Types (from rbtl_patterns.pdf)
+## Visual & Audio Feedback
 
-### Mode A: "Blank in the Middle"
-- **Layout:** 10 rows, each with 2 targets - one on far LEFT, one on far RIGHT
-- **Blank space** in the middle simulates the span of a line of text
-- **Flow:** User taps: left → right → next line (top to bottom)
-- **Purpose:** Train eyes to sweep from far left to far right of a "line"
+### Visual States
+| State | Appearance | When |
+|-------|------------|------|
+| Pending | Character with **translucent blue balloon** | Not yet reached in sequence |
+| Hit | Character only (balloon popped/gone) | Correctly tapped |
+| Miss | Character with **translucent red balloon** | Wrong tap or timed out |
 
-### Mode B: Full Grid with Underlined Targets
-- **Layout:** 10 rows × 10 characters = 100 characters per exercise
-- **Character types:** Numbers (0-9) or letters (A-Z)
-- **Target marking:** Two characters per line are **underlined** with blue dots
-  - One in the LEFT half (positions 1-5)
-  - One in the RIGHT half (positions 6-10)
-- **Purpose:** Train student to make exactly **two fixations per line**
-- **Cognitive load:** User must visually search and identify the underlined target
+### Audio Feedback
+| Event | Sound |
+|-------|-------|
+| Hit | **Pop sound** (balloon popping) |
+| Miss | Metronome tick only (no pop) |
+| Countdown | Metronome tick |
 
 ---
 
-## Mode A Layout
+## Mode A Layout (Blank Middle)
 
 ```
 ┌────────────────────────────────────────┐
 │                                        │
-│  7●                              3●    │  Row 1
+│  (7)                            (3)    │  Row 1
 │                                        │
-│  2●                              8●    │  Row 2
+│  (2)                            (8)    │  Row 2
 │                                        │
 │  ...                            ...    │  Rows 3-9
 │                                        │
-│  5●                              1●    │  Row 10
+│  (5)                            (1)    │  Row 10
 │                                        │
 │                [Restart]               │
 └────────────────────────────────────────┘
 
-● = Blue dot on target
+(X) = Character with translucent blue balloon overlay
 Tap sequence: L1 → R1 → L2 → R2 → ... → L10 → R10
 ```
 
@@ -112,71 +130,31 @@ Tap sequence: L1 → R1 → L2 → R2 → ... → L10 → R10
 
 ---
 
-## Mode B Layout
+## Mode B Layout (Full Grid)
 
 ```
 ┌────────────────────────────────────────┐
-│  7  3  9̲● 1  4  |  8  2̲● 6  0  5     │  Row 1
-│  2  8̲● 4  6  1  |  5  9  3̲● 7  0     │  Row 2
+│  7  3 (9̲) 1  4  |  8 (2̲) 6  0  5     │  Row 1
+│  2 (8̲) 4  6  1  |  5  9 (3̲) 7  0     │  Row 2
 │  ...                                   │  Rows 3-10
 │                                        │
 │                [Restart]               │
 └────────────────────────────────────────┘
 
-̲● = underlined character with blue dot (tappable target)
-Plain characters = non-targets (no interaction)
+(X̲) = underlined character with translucent blue balloon
+Plain characters = non-targets (gray, no balloon)
 ```
 
 - 100 characters in 10×10 grid
 - Each row: 1 target in columns 1-5, 1 target in columns 6-10
 - Random position within each half
-- Blue dots only on the 20 underlined targets
+- Target characters are **underlined AND have blue balloon**
 
 ---
 
-## Visual Feedback States
+## Future Enhancements (not in initial version)
 
-| State | Appearance | When |
-|-------|------------|------|
-| Pending | Character with blue dot | Not yet reached in sequence |
-| Hit | Character only (dot gone) | Correctly tapped |
-| Miss | Character with red circle | Wrong tap or skipped |
-
-No "active" highlight - user learns the left-right-down pattern naturally.
-
----
-
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `Models/Target.swift` | Add `TargetState` enum, character, sequenceIndex |
-| `Models/GameSettings.swift` | Add GameMode, CharacterType enums; BPM 50-150; dotSize |
-| `Services/GameEngine.swift` | Mode A/B layouts, random generation, countdown, tap handling |
-| `Views/GameView.swift` | New TargetView, countdown overlay, restart button |
-| `Views/SettingsView.swift` | Setup screen with all options |
-| `ContentView.swift` | Navigation flow: Setup → Game |
-
----
-
-## Implementation Order
-
-1. Update GameSettings with new enums, BPM range
-2. Update Target model with state enum, character, sequence index
-3. Create Setup screen with mode/character/BPM/dot size selection
-4. Update GameEngine with Mode A layout and random generation
-5. Update GameView with new TargetView, countdown overlay, restart button
-6. Test Mode A end-to-end
-7. Add Mode B to GameEngine (grid layout, underlines)
-8. Test Mode B end-to-end
-9. Remove old 5-target code
-
----
-
-## Open Questions (to revisit)
-
-1. **Results screen**: What stats to show after completion? (hits, misses, accuracy %, time?)
-2. **Sound**: Different sounds for hit vs miss, or just metronome click?
+1. **Results/stats screen**: Deferred - the real reward is progressing to higher speeds with minimal errors
 
 ---
 
@@ -189,4 +167,4 @@ The original paper exercises have students speak the numbers/letters aloud. For 
 
 ---
 
-*Last updated: 2026-02-02*
+*Last updated: 2026-02-03*
