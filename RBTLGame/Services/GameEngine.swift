@@ -256,10 +256,16 @@ class GameEngine: ObservableObject {
         phase = .countdown
         currentSequenceIndex = 0
 
-        let countdownSequence = ["5", "4", "3", "2", "1", "Go"]
+        let countdownSequence = ["5", "4", "3", "2", "1"]
         var index = 0
 
         let interval = beatInterval
+
+        // Record when countdown starts so we can calculate exact gameplay start
+        let countdownStartTime = Date()
+
+        // Pre-calculate gameStartTime so pre-beat taps on target 0 work during countdown
+        gameStartTime = countdownStartTime.addingTimeInterval(Double(countdownSequence.count) * interval)
 
         // Show first countdown immediately
         countdownValue = countdownSequence[0]
@@ -276,6 +282,8 @@ class GameEngine: ObservableObject {
                     index += 1
                 } else {
                     // Countdown finished, start playing
+                    // Calculate gameStartTime from countdown rhythm, not Date(),
+                    // so timing stays perfectly aligned with the beats the user heard
                     self.countdownValue = ""
                     self.startPlaying()
                 }
@@ -286,7 +294,10 @@ class GameEngine: ObservableObject {
     private func startPlaying() {
         timer?.invalidate()
         phase = .playing
-        gameStartTime = Date()
+        // gameStartTime was already set during countdown for rhythm-accurate timing
+        if gameStartTime == nil {
+            gameStartTime = Date()
+        }
         currentSequenceIndex = 0
 
         // Play first beat immediately (target 0's beat)
@@ -347,7 +358,8 @@ class GameEngine: ObservableObject {
     }
 
     func handleTap(at location: CGPoint) {
-        guard phase == .playing else { return }
+        // Allow taps during countdown (for pre-beat window on first target) and playing
+        guard phase == .playing || phase == .countdown else { return }
 
         // Find which pending target the user tapped (spatially)
         for i in targets.indices {

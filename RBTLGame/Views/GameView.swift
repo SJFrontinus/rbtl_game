@@ -68,6 +68,7 @@ struct GameView: View {
                 // Countdown overlay
                 if gameEngine.phase == .countdown && !gameEngine.countdownValue.isEmpty {
                     CountdownOverlay(value: gameEngine.countdownValue)
+                        .allowsHitTesting(false)  // Let taps pass through for pre-beat window
                 }
 
                 // Controls overlay
